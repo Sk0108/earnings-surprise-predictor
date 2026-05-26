@@ -11,16 +11,20 @@ import streamlit as st
 
 from earnings_surprise.config import ARTIFACT_DIR, MODEL_FEATURES, OPERATING_THRESHOLD, PROCESSED_DIR
 from earnings_surprise.data.dataset import load_training_frame
+from earnings_surprise.modeling.backtest import rolling_year_backtest
+from earnings_surprise.modeling.explain import export_shap_values, summarize_shap, write_metrics
+from earnings_surprise.modeling.train import train_classifier
 from earnings_surprise.ui.components import format_feature_name, metric_card, probability_badge, top_events_table
 from earnings_surprise.ui.theme import apply_theme
+from scripts.generate_demo_data import main as generate_demo_data
 
 
 def load_artifacts() -> tuple[pd.DataFrame, dict, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     dataset_path = PROCESSED_DIR / "earnings_surprise_dataset.csv"
     model_path = ARTIFACT_DIR / "earnings_surprise_model.joblib"
     if not dataset_path.exists() or not model_path.exists():
-        st.error("Artifacts are missing. Run `python scripts/generate_demo_data.py` and `python scripts/train_model.py --demo` first.")
-        st.stop()
+        with st.spinner("Preparing demo dataset and model artifacts for this deployment..."):
+            create_demo_artifacts()
 
     data = load_training_frame(str(dataset_path))
     bundle = joblib.load(model_path)
@@ -30,6 +34,31 @@ def load_artifacts() -> tuple[pd.DataFrame, dict, pd.DataFrame, pd.DataFrame, pd
     backtest = read_csv_or_empty(ARTIFACT_DIR / "backtest_metrics.csv")
     predictions = read_csv_or_empty(ARTIFACT_DIR / "holdout_predictions.csv")
     return data, metrics, shap_summary, backtest, predictions
+
+
+def create_demo_artifacts() -> None:
+    generate_demo_data()
+    data = load_training_frame()
+    train, test = time_split_for_app(data)
+    result = train_classifier(train, test)
+    bundle = joblib.load(result.model_path)
+    probabilities = bundle["model"].predict_proba(test[bundle["features"]])[:, 1]
+
+    shap_values = export_shap_values(bundle["model"], test)
+    summarize_shap(shap_values)
+    result.feature_importance.to_csv(ARTIFACT_DIR / "feature_importance.csv", index=False)
+    test.assign(predicted_probability=probabilities).to_csv(ARTIFACT_DIR / "holdout_predictions.csv", index=False)
+    rolling_year_backtest(data).to_csv(ARTIFACT_DIR / "backtest_metrics.csv", index=False)
+    write_metrics(result.metrics)
+
+
+def time_split_for_app(data: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    from earnings_surprise.data.dataset import time_split
+
+    try:
+        return time_split(data, test_year=2026)
+    except ValueError:
+        return time_split(data)
 
 
 def read_json(path: Path) -> dict:
