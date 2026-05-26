@@ -1,4 +1,4 @@
-# Project 01: Earnings Surprise Predictor
+# Project: Earnings Surprise Predictor
 
 Predict whether a public company will beat or miss analyst EPS estimates by combining NLP signals from filings/transcripts with market and fundamental features.
 
