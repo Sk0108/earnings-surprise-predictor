@@ -88,7 +88,3 @@ For FinBERT features, install the HuggingFace dependencies from `requirements-ml
 ```powershell
 python -m pip install -r requirements-ml.txt
 ```
-
-## Resume Bullet
-
-Built earnings surprise classifier combining NLP sentiment on SEC filings with fundamental features using XGBoost/FinBERT-style embeddings, backtested on a three-year S&P 500-style holdout set with SHAP-driven explainability and a production-grade Streamlit analytics dashboard.
